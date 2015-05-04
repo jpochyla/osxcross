@@ -205,8 +205,13 @@ verifyFileIntegrity()
 getPkgUrl()
 {
   local pkgname="$1"
+  local pkgversion="$2"
   local pkgs
   local pkg
+
+  if [ -z $pkgversion ]; then
+      pkgversion=".*"
+  fi
 
   set +e
 
@@ -229,7 +234,10 @@ getPkgUrl()
     verboseMsg "  $p"
   done
 
-  local pkg=$(echo "$pkgs" | grep $OSXVERSION | uniq | tail -n1)
+  local pkg=$(echo "$pkgs" | \
+                   grep "$pkgversion" | \
+                   grep "$OSXVERSION" | \
+                   uniq | tail -n1)
 
   verboseMsg " selected: $pkg"
 
@@ -266,6 +274,7 @@ pkgInstalled()
 installPkg()
 {
   local pkgname="$1"
+  local pkgversion="$2"
 
   LASTPKGNAME=$pkgname
 
@@ -275,22 +284,22 @@ installPkg()
 
   echo "searching package $pkgname ..."
 
-  local pkgurl=$(getPkgUrl "$pkgname")
+  local pkgurl=$(getPkgUrl "$pkgname" "$pkgversion")
   local pkgfile=$(echo "$pkgurl" | awk -F'/' '{print $NF}')
 
   if [ -z "$pkgurl" ]; then
     local oldpkgname=$pkgname
-    local tmp=$(echo "$pkgname" | awk -F'-'  '{print $NF}')
-    [ -n "$tmp" ] && pkgname=${pkgname/-$tmp/}
+    local pkgversion=$(echo "$pkgname" | awk -F'-'  '{print $NF}')
+    [ -n "$pkgversion" ] && pkgname=${pkgname/-$pkgversion/}
 
     if [ "$pkgname" != "$oldpkgname" ]; then
-      echo "trying $pkgname instead ..."
+      echo "trying $pkgname version $pkgversion instead ..."
     else
       [ -n "$UPGRADE" ] && return
       exit 3
     fi
 
-    installPkg $pkgname
+    installPkg $pkgname $pkgversion
     return
   fi
 
@@ -333,8 +342,7 @@ installPkg()
     fi
   fi
 
-  local pkgdeps=$(grep '@pkgdep' \+CONTENTS | cut -d\  -f2 | \
-                  rev | cut -f2-100 -d\- | rev)
+  local pkgdeps=$(grep '@pkgdep' \+CONTENTS | cut -d\  -f2)
 
   popd &>/dev/null # TMP
   rm -rf $TMP/*
